@@ -32,21 +32,22 @@
 
 ## 安装
 
-### 方式一：静态安装（推荐，重启 DSH 后永久生效）
+### 方式一：一键安装（推荐，一行命令）
 
-1. 克隆本仓库：`git clone https://github.com/<your-org>/dsh-shortcuts ~/dsh-shortcuts`
-2. 链接到 web profile：
-   ```bash
-   ln -sfn ~/dsh-shortcuts ~/.dsh/profiles/web/node_modules/dsh-shortcuts
-   ```
-3. 编辑 `~/.dsh/profiles/web/package.json`，在 `dependencies` 与 `dsh.profile.bundles` 中分别加入 `dsh-shortcuts`：
-   ```json
-   {
-     "dependencies": { "dsh-shortcuts": "file:../../dsh-shortcuts", "…": "…" },
-     "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "…", "dsh-shortcuts"] } }
-   }
-   ```
-4. 完全退出并重启 DSH。左下角设置按钮旁出现「⌘K 快捷键」按钮即安装成功。
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ricketts-Guo/dsh-shortcuts/main/install.sh | bash
+```
+
+脚本自动完成：克隆插件 → 链接到 web profile → 注册到 `package.json`（幂等，可重复运行）。完成后**完全退出并重新打开 DeepSeek Harness**，左下角设置按钮旁出现「⌘K 快捷键」按钮即安装成功。
+
+**更新插件**：重新运行上面同一行命令即可。
+
+**手动步骤版**（脚本等价操作）：
+
+1. `git clone https://github.com/Ricketts-Guo/dsh-shortcuts.git ~/dsh-shortcuts`
+2. `ln -sfn ~/dsh-shortcuts ~/.dsh/profiles/web/node_modules/dsh-shortcuts`
+3. 编辑 `~/.dsh/profiles/web/package.json`，在 `dependencies` 与 `dsh.profile.bundles` 中分别加入 `dsh-shortcuts`
+4. 重启 DSH
 
 ### 方式二：会话级动态插件（临时，进程重启后失效）
 
