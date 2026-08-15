@@ -6,7 +6,7 @@
   "author": "ziqian.guo",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/<your-org>/dsh-shortcuts.git"
+    "url": "git+https://github.com/Ricketts-Guo/dsh-shortcuts.git"
   },
   "keywords": [
     "deepseek-harness",
