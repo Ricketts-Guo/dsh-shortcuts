@@ -38,16 +38,18 @@
 curl -fsSL https://raw.githubusercontent.com/Ricketts-Guo/dsh-shortcuts/main/install.sh | bash
 ```
 
-脚本自动完成：克隆插件 → 链接到 web profile → 注册到 `package.json`（幂等，可重复运行）。完成后**完全退出并重新打开 DeepSeek Harness**，左下角设置按钮旁出现「⌘K 快捷键」按钮即安装成功。
+脚本自动完成：克隆插件 → 链接到 web profile → 注册到 `package.json` → **同步 pnpm lockfile（将插件纳入 pnpm 管理，防止后续安装/更新其他插件时被清掉）**（幂等，可重复运行）。完成后**完全退出并重新打开 DeepSeek Harness**，左下角设置按钮旁出现「⌘K 快捷键」按钮即安装成功。
 
-**更新插件**：重新运行上面同一行命令即可。
+**更新插件**：重新运行上面同一行命令即可（`pnpm install` 会同步最新代码副本，再重启 DSH 生效）。
 
 **手动步骤版**（脚本等价操作）：
 
 1. `git clone https://github.com/Ricketts-Guo/dsh-shortcuts.git ~/dsh-shortcuts`
-2. `ln -sfn ~/dsh-shortcuts ~/.dsh/profiles/web/node_modules/dsh-shortcuts`
-3. 编辑 `~/.dsh/profiles/web/package.json`，在 `dependencies` 与 `dsh.profile.bundles` 中分别加入 `dsh-shortcuts`
+2. 编辑 `~/.dsh/profiles/web/package.json`，在 `dependencies`（`"dsh-shortcuts": "file:../../../dsh-shortcuts"`）与 `dsh.profile.bundles` 中分别加入 `dsh-shortcuts`
+3. `cd ~/.dsh/profiles/web && pnpm install`（生成 pnpm 受管的 `node_modules/dsh-shortcuts` 副本）
 4. 重启 DSH
+
+> ⚠️ 版本 1.1.0 起安装改为 pnpm 托管：`node_modules/dsh-shortcuts` 是 pnpm 从源码仓库同步的**受管副本**而非符号链接。修改 `~/dsh-shortcuts` 源码后，需重新运行 install.sh（或 `cd ~/.dsh/profiles/web && pnpm install`）同步副本，再重启 DSH 生效。不要手动 `ln -sfn` 覆盖它——pnpm 下次运行时若检测到依赖状态不符可能重装或清理。
 
 ### 方式二：会话级动态插件（临时，进程重启后失效）
 
@@ -55,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/Ricketts-Guo/dsh-shortcuts/main/ins
 
 ## 卸载
 
-- 静态安装：从 `~/.dsh/profiles/web/package.json` 移除两处 `dsh-shortcuts` 引用，删除 `node_modules/dsh-shortcuts` 链接，重启 DSH。
+- 静态安装：`cd ~/.dsh/profiles/web && pnpm remove dsh-shortcuts`（或从 `~/.dsh/profiles/web/package.json` 移除两处 `dsh-shortcuts` 引用并运行 `pnpm install`），重启 DSH。
 - 动态插件：`cordis_stop` / `cordis_undefine`。
 - 自定义配置残留在浏览器 localStorage（键 `dsh.shortcuts.v1`），可在浏览器开发者工具中删除。
 
