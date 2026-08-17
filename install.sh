@@ -102,6 +102,22 @@ if not os.path.isfile(installed_pkg):
 print('    冷启动校验通过（dependencies + bundles + .package-map.json）')
 PY
 
+echo "==> 4/4 同步 pnpm lockfile（纳入 pnpm 管理，防止后续安装/更新其他插件时被清掉）"
+
+if command -v pnpm >/dev/null 2>&1 || [ -x "$HOME/.dsh/bin/pnpm" ]; then
+  export PATH="$HOME/.dsh/bin:/usr/local/bin:$PATH"
+  if (cd "$PROFILE_DIR" && pnpm install --no-frozen-lockfile); then
+    echo "    lockfile 已同步（dsh-shortcuts 现由 pnpm 管理）"
+  else
+    echo "⚠️  pnpm install 失败（网络问题？），当前链接仍可工作；"
+    echo "    但下次在 profile 中运行 pnpm（如插件市场安装/更新）可能清掉 dsh-shortcuts，"
+    echo "    请网络恢复后重跑本脚本。"
+  fi
+else
+  echo "⚠️  未找到 pnpm（PATH 或 ~/.dsh/bin/pnpm），跳过 lockfile 同步；"
+  echo "    建议安装 pnpm 后重跑本脚本，否则后续 pnpm 操作可能清掉插件。"
+fi
+
 echo "==> 5/5 完成"
 echo ""
 echo "✅ 永久安装完成：Desktop APP 与命令行启动的 WebUI 共用这个 web profile。"
