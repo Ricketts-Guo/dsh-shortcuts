@@ -104,8 +104,9 @@ PY
 
 echo "==> 5/5 完成"
 echo ""
-echo "✅ 安装完成！最后一步：完全退出并重新打开 DeepSeek Harness。"
-echo "   重启后，左下角设置按钮旁出现「⌘K 快捷键」按钮即安装成功。"
+echo "✅ 永久安装完成：Desktop APP 与命令行启动的 WebUI 共用这个 web profile。"
+echo "   完全退出并重新打开 DeepSeek Harness 后，插件会随两种界面自动启动。"
+echo "   左下角设置按钮旁出现「⌘K 快捷键」按钮即安装成功。"
 echo ""
 echo "🔧 常用命令"
 echo "   更新插件:   $INSTALL_DIR/install.sh   （或重新运行上面那行 curl 命令）"

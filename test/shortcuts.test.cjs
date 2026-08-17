@@ -139,6 +139,9 @@ function checkHookOrder(src) {
 
 vm.runInNewContext(code, sandbox, { filename: 'dsh-shortcuts/client.js' });
 const mod = sandbox.__handoff.factory((spec) => hostReq(spec));
+if (JSON.stringify(mod.inject) !== JSON.stringify(['slots', 'sessions'])) {
+  throw new Error('client module must wait for slots and sessions before apply');
+}
 
 const scopeConversation = { cancel: () => { sandbox.__cancel = true; return Promise.resolve(); } };
 // 权限命令通道（session.command）：记录调用并返回 matched 结果

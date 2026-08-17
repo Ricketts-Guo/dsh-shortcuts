@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2] - 2026-08-17
+
+### Fixed
+- 客户端显式声明 `slots` / `sessions` 服务依赖，等待 DSH client runtime 完成初始化后再注册快捷键监听、设置页、浮层和侧边栏入口，修复 WebUI 与 Desktop APP 冷启动时“显示已加载但快捷键不可用”
+- 宿主权限路由改为响应式等待 `webServer` / `permissionPresets` / `sessions`，修复完全退出 DSH 后重启时路由永久漏注册的问题
+- 新增客户端服务依赖与宿主冷启动生命周期回归测试
+
 ## [1.1.1] - 2026-08-16
 
 ### Fixed

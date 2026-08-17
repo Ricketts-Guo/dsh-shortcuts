@@ -1,4 +1,4 @@
-# dsh-shortcuts — DeepSeek Harness WebUI 键盘快捷键
+# dsh-shortcuts — DeepSeek Harness Desktop / WebUI 键盘快捷键
 
 为 [DeepSeek Harness](https://deepseek.com) 的 WebUI 提供一套**可完全自定义的键盘快捷键系统**。所有可触达的功能预注册在分组列表中，带默认键的直接生效（macOS 优先，其他平台自动改用 Ctrl），其余一键录制即可绑定。配置保存在浏览器 localStorage，刷新/重启不丢。
 
@@ -37,6 +37,8 @@
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ricketts-Guo/dsh-shortcuts/main/install.sh | bash
 ```
+
+安装写入 DSH 共用的 `~/.dsh/profiles/web` profile，因此 **Desktop APP 与浏览器 WebUI 一次安装同时生效**；以后完全退出、重启 DSH 时也会自动加载，无需再次手动启用。
 
 脚本自动完成：克隆插件 → 通过 pnpm 安装到 web profile → 注册 bundle → 校验 DSH 冷启动模块映射（幂等，可重复运行）。完成后**完全退出并重新打开 DeepSeek Harness**，左下角设置按钮旁出现「⌘K 快捷键」按钮即安装成功。
 
