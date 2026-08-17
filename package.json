@@ -1,6 +1,6 @@
 {
   "name": "dsh-shortcuts",
-  "version": "1.1.0",
+  "version": "1.1.3",
   "description": "Fully customizable keyboard shortcuts for the DeepSeek Harness WebUI — macOS-first defaults, 34 pre-registered features across session/view/clipboard/model/permission/system groups, one-click recording to add your own bindings, silent permission cycling with color feedback.",
   "license": "MIT",
   "author": "ziqian.guo",
@@ -36,8 +36,8 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "test": "node test/shortcuts.test.cjs",
-    "check": "node --check lib/client.js && node --check lib/index.js && node test/shortcuts.test.cjs"
+    "test": "node test/shortcuts.test.cjs && node test/host.test.mjs && bash test/install.test.sh",
+    "check": "node --check lib/client.js && node --check lib/index.js && node test/shortcuts.test.cjs && node test/host.test.mjs && bash test/install.test.sh"
   },
   "dsh": {
     "bundle": {
