@@ -17,6 +17,8 @@ const { createRequire } = require('module');
 const ROOT = path.join(__dirname, '..');
 const HOST_MODULES = '/Applications/DeepSeek Harness.app/Contents/Resources/host/package.json';
 const hostReq = createRequire(fs.existsSync(HOST_MODULES) ? HOST_MODULES : path.join(ROOT, 'package.json'));
+const React = hostReq('react');
+const ReactDOMServer = hostReq('react-dom/server');
 
 // ---------- browser stubs ----------
 const styleEl = { setAttribute() {}, remove() {}, textContent: '' };
@@ -145,20 +147,28 @@ function checkHookOrder(src) {
 
 vm.runInNewContext(code, sandbox, { filename: 'dsh-shortcuts/client.js' });
 const mod = sandbox.__handoff.factory((spec) => hostReq(spec));
-if (JSON.stringify(mod.inject) !== JSON.stringify(['slots', 'sessions'])) {
-  throw new Error('client module must wait for slots and sessions before apply');
+if (JSON.stringify(mod.inject) !== JSON.stringify(['slots', 'sessions', 'remote', 'timer'])) {
+  throw new Error('client module must wait for slots, sessions, remote, and timer before apply');
 }
 
 const scopeConversation = { cancel: () => { sandbox.__cancel = true; return Promise.resolve(); } };
 // 权限命令通道（session.command）：记录调用并返回 matched 结果
 const commandCalls = [];
+const slotRenderers = {};
+const slotsService = {
+  inject(name, mount) { return mount(); },
+  register(spec, render) {
+    slotRenderers[spec.id] = render;
+    return () => { delete slotRenderers[spec.id]; };
+  },
+};
 const sessionObj = {
   projections: fakeProjections,
   command: (line) => { commandCalls.push(line); return Promise.resolve({ ok: true, value: { matched: true } }); },
 };
-const ctx = {
+const ctxTarget = {
   get(name) {
-    if (name === 'slots') return { inject: () => () => {}, register: () => () => {} };
+    if (name === 'slots') return slotsService;
     if (name === 'sessions') return {
       binding: () => ({ session: sessionObj }),
       scope: () => ({ get: (k) => (k === 'conversation' ? scopeConversation : undefined) }),
@@ -169,11 +179,20 @@ const ctx = {
     if (name === 'layout') return { toggleSidebar: () => { sandbox.__sidebar = true; }, openDetails: () => {}, closeDetails: () => {} };
     if (name === 'theme') return { getTheme: () => ({ active: { colorScheme: 'dark' } }), setTheme: (id) => { sandbox.__theme = id; } };
     if (name === 'locale') return { getSnapshot: () => ({ active: 'zh', locales: [{ id: 'zh' }, { id: 'en' }] }), setLocale: (id) => { sandbox.__locale = id; } };
+    if (name === 'remote.commands') return { execute() {} };
     return undefined;
   },
   timeout(cb) { return () => {}; },
   effect(cb) { const d = cb(); return () => d && d(); },
 };
+// DSH rc.6 会阻止未声明的 ctx.remote.commands 属性访问。测试使用同类
+// Guard，确保速查表诊断只通过 ctx.get('remote.commands') 读取嵌套服务。
+const ctx = new Proxy(ctxTarget, {
+  get(target, prop, receiver) {
+    if (prop === 'remote') throw new Error('cannot get property "remote.commands" without inject');
+    return Reflect.get(target, prop, receiver);
+  },
+});
 mod.apply(ctx);
 
 const handler = sandbox.__handlers[0];
@@ -231,11 +250,12 @@ const ok = (cond, name) => { if (!cond) throw new Error('FAIL: ' + name); passed
   await sleep(10);
   ok(sandbox.__theme === 'light', '⌘⇧L toggles theme');
 
-  // 8) ⌘/ 速查表开关（不抛错即可）
+  // 8) ⌘/ 速查表开关，并真正渲染 overlay（覆盖 DSH rc.6 Guard）
   press({ key: '/', shiftKey: false, metaKey: true, ctrlKey: false, altKey: false }, ta);
+  const cheatsheetRenderer = slotRenderers['dyn-shortcuts-cheatsheet'];
+  const cheatsheetMarkup = ReactDOMServer.renderToStaticMarkup(cheatsheetRenderer({}));
+  ok(cheatsheetMarkup.includes('快捷键速查表') && cheatsheetMarkup.includes('命令通道'), '⌘/ renders cheatsheet under guarded DSH context');
   press({ key: '/', shiftKey: false, metaKey: true, ctrlKey: false, altKey: false }, ta);
-  await sleep(10);
-  ok(true, '⌘/ toggles cheatsheet without errors');
 
   // 9) 复制最后一条助手消息（预置绑定 ⌘⇧C）
   sandbox.__preset = JSON.stringify({ actions: {

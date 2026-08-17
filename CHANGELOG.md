@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4] - 2026-08-17
+
+### Fixed
+- 合并客户端重复的 `inject` 声明，修复 `Identifier 'inject' has already been declared` 导致整个插件无法加载
+- 速查表诊断通过 `ctx.get('remote.commands')` 安全读取嵌套服务，避免 DSH rc.6 Guard 导致 `shell.overlay` 崩溃
+- 新增真实渲染速查表的回归测试，覆盖 `⌘/` 触发、嵌套服务诊断与 overlay 渲染路径
+
 ## [1.1.3] - 2026-08-17
 
 ### Changed
