@@ -33,7 +33,11 @@ const sandbox = {
       getItem: () => sandbox.__preset || null,
       setItem: (k, v) => { sandbox.__stored = v; },
     },
-    addEventListener: (type, fn, cap) => { if (type === 'keydown') sandbox.__handlers.push(fn); },
+    addEventListener: (type, fn, cap) => {
+      if (type === 'keydown') sandbox.__handlers.push(fn);
+      if (type === 'keyup') sandbox.__keyupHandlers.push(fn);
+      if (type === 'blur') sandbox.__blurHandlers.push(fn);
+    },
     removeEventListener: () => {},
     scrollTo: (o) => { sandbox.__scroll = o; },
   },
@@ -56,6 +60,8 @@ const sandbox = {
 };
 sandbox.window.__ModuleLoader__ = { load: (handoff) => { sandbox.__handoff = handoff; } };
 sandbox.__handlers = [];
+sandbox.__keyupHandlers = [];
+sandbox.__blurHandlers = [];
 sandbox.__preset = null;
 sandbox.__selected = [];
 
@@ -173,7 +179,12 @@ mod.apply(ctx);
 const handler = sandbox.__handlers[0];
 if (!handler) throw new Error('keydown handler not registered');
 
-const press = (init, target) => handler({ repeat: false, target, preventDefault() { this._pd = true; }, stopPropagation() {}, ...init });
+const press = (init, target) => {
+  const event = { repeat: false, target, preventDefault() { this._pd = true; }, stopPropagation() {}, ...init };
+  handler(event);
+  return event;
+};
+const release = (init) => sandbox.__keyupHandlers[0]({ ...init });
 const ta = { tagName: 'TEXTAREA', isContentEditable: false };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let passed = 0;
@@ -185,39 +196,52 @@ const ok = (cond, name) => { if (!cond) throw new Error('FAIL: ' + name); passed
   await sleep(20);
   ok(sandbox.__selected[0] && sandbox.__selected[0].model === 'deepseek-v4-flash' && sandbox.__selected[0].reasoningEffort === 'low', '⌘1 selects model 1 with default effort');
 
-  // 2) ⌘⇧1（key=!）设定第 1 档思考强度
+  // 2) 旧 ⌘⇧1 默认键不再触发（避免 macOS 截屏冲突）
+  const beforeLegacyEffort = sandbox.__selected.length;
   press({ key: '!', shiftKey: true, metaKey: true, ctrlKey: false, altKey: false }, ta);
   await sleep(20);
-  ok(sandbox.__selected[1] && sandbox.__selected[1].reasoningEffort === 'low', '⌘⇧1 (key=!) sets effort[0]');
+  ok(sandbox.__selected.length === beforeLegacyEffort, 'legacy ⌘⇧1 no longer selects an effort');
 
-  // 3) ⌘⇧3（key=#）→ max
-  press({ key: '#', shiftKey: true, metaKey: true, ctrlKey: false, altKey: false }, ta);
+  // 3) 按住 Tab + 1 → 第 1 档；裸 Tab 本身仍不被拦截
+  const tabDown1 = press({ key: 'Tab', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false }, ta);
+  press({ key: '1', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false }, ta);
   await sleep(20);
-  ok(sandbox.__selected[2] && sandbox.__selected[2].reasoningEffort === 'max', '⌘⇧3 (key=#) sets effort[2]');
+  ok(!tabDown1._pd && sandbox.__selected[1] && sandbox.__selected[1].reasoningEffort === 'low', 'Tab+1 sets effort[0] without intercepting bare Tab');
+  release({ key: 'Tab' });
 
-  // 4) ⌘. 停止任务
+  // 4) 按住 Tab + 3 → max
+  press({ key: 'Tab', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false }, ta);
+  press({ key: '3', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false }, ta);
+  await sleep(20);
+  ok(sandbox.__selected[2] && sandbox.__selected[2].reasoningEffort === 'max', 'Tab+3 sets effort[2]');
+  release({ key: 'Tab' });
+
+  // 5) ⌘. 停止任务
   press({ key: '.', shiftKey: false, metaKey: true, ctrlKey: false, altKey: false }, ta);
   await sleep(10);
   ok(sandbox.__cancel === true, '⌘. stops the running task');
 
-  // 5) ⇧Tab 权限轮换
+  // 6) ⇧Tab 权限轮换
   press({ key: 'Tab', shiftKey: true, metaKey: false, ctrlKey: false, altKey: false }, ta);
   await sleep(10);
   ok(sandbox.__permFetch && sandbox.__permFetch.includes('preset=danger-full-access') && sandbox.__permFetch.includes('sessionId=s1'), '⇧Tab cycles permission via silent host route');
 
-  // 6) ⌘⇧L 主题
+  // 7) ⌘⇧L 主题
   press({ key: 'l', shiftKey: true, metaKey: true, ctrlKey: false, altKey: false }, ta);
   await sleep(10);
   ok(sandbox.__theme === 'light', '⌘⇧L toggles theme');
 
-  // 7) ⌘/ 速查表开关（不抛错即可）
+  // 8) ⌘/ 速查表开关（不抛错即可）
   press({ key: '/', shiftKey: false, metaKey: true, ctrlKey: false, altKey: false }, ta);
   press({ key: '/', shiftKey: false, metaKey: true, ctrlKey: false, altKey: false }, ta);
   await sleep(10);
   ok(true, '⌘/ toggles cheatsheet without errors');
 
-  // 8) 复制最后一条助手消息（预置绑定 ⌘⇧C）
-  sandbox.__preset = JSON.stringify({ actions: { copyLastMessage: { enabled: true, combo: 'Meta+Shift+C' } } });
+  // 9) 复制最后一条助手消息（预置绑定 ⌘⇧C）
+  sandbox.__preset = JSON.stringify({ actions: {
+    copyLastMessage: { enabled: true, combo: 'Meta+Shift+C' },
+    selectEffort1: { enabled: true, combo: 'Meta+Shift+1' },
+  } });
   sandbox.__clipboard = [];
   const mod2 = sandbox.__handoff.factory((spec) => hostReq(spec));
   mod2.apply(ctx);
@@ -226,15 +250,24 @@ const ok = (cond, name) => { if (!cond) throw new Error('FAIL: ' + name); passed
   await sleep(20);
   ok(sandbox.__clipboard && sandbox.__clipboard[0] === '回复二\n第二行', 'copyLastMessage copies last assistant text (skips reasoning)');
 
-  // 9) 打字不拦截
+  // 10) 旧版默认思考强度绑定自动迁移为 Tab+数字
+  const beforeMigratedEffort = sandbox.__selected.length;
+  handler2({ repeat: false, target: ta, preventDefault() {}, stopPropagation() {}, key: 'Tab', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false });
+  handler2({ repeat: false, target: ta, preventDefault() {}, stopPropagation() {}, key: '1', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false });
+  await sleep(20);
+  ok(sandbox.__selected[beforeMigratedEffort] && sandbox.__selected[beforeMigratedEffort].reasoningEffort === 'low', 'legacy effort default migrates to Tab+1');
+  sandbox.__keyupHandlers[1]({ key: 'Tab' });
+
+  // 11) 打字不拦截
   const before = sandbox.__selected.length;
   press({ key: 'a', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false }, ta);
   ok(sandbox.__selected.length === before, 'typing is never intercepted');
 
-  // 10) 裸 Tab 不触发
+  // 12) 裸 Tab 不触发
   const before2 = commandCalls.length;
   press({ key: 'Tab', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false }, ta);
   ok(commandCalls.length === before2, 'bare Tab is not intercepted');
+  release({ key: 'Tab' });
 
   console.log(`\nAll ${passed} tests passed.`);
 })().catch((e) => { console.error('\n' + e.message); process.exit(1); });
