@@ -1,84 +1,45 @@
 #!/usr/bin/env bash
-
+# CLI dispatch/failure tests; runtime.test.mjs separately runs the real DSH CLI.
 set -euo pipefail
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
-
-PROFILE_DIR="$TEST_ROOT/home/.dsh/profiles/web"
-FAKE_BIN="$TEST_ROOT/bin"
-mkdir -p "$PROFILE_DIR" "$FAKE_BIN"
-
-cat > "$PROFILE_DIR/package.json" <<'JSON'
-{
-  "name": "dsh-profile-web-test",
-  "private": true,
-  "dependencies": {},
-  "dsh": {
-    "profile": {
-      "bundles": [
-        "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app"
-      ]
-    }
-  }
-}
-JSON
-
-cat > "$PROFILE_DIR/pnpm-workspace.yaml" <<'YAML'
-packages:
-  - .
-
-nodeLinker: hoisted
-autoInstallPeers: false
-YAML
-
-# 安装器对已有 checkout 只会执行 git pull；测试中隔离网络和真实工作树。
-cat > "$FAKE_BIN/git" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-chmod +x "$FAKE_BIN/git"
-
-run_installer() {
-  PATH="$FAKE_BIN:$PATH" \
-    DSH_SHORTCUTS_DIR="$ROOT_DIR" \
-    DSH_PROFILE_DIR="$PROFILE_DIR" \
-    bash "$ROOT_DIR/install.sh"
-}
-
-# 首次安装必须生成 DSH 冷启动依赖的模块映射。
-run_installer
-
-node - "$PROFILE_DIR" <<'NODE'
-const fs = require('fs');
-const path = require('path');
-
-const profileDir = process.argv[2];
-const pkg = JSON.parse(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'));
-const packageMap = JSON.parse(fs.readFileSync(path.join(profileDir, 'node_modules', '.package-map.json'), 'utf8'));
-const bundles = pkg.dsh.profile.bundles.filter((name) => name === 'dsh-shortcuts');
-
-if (!pkg.dependencies['dsh-shortcuts']) throw new Error('dependency was not registered');
-if (bundles.length !== 1) throw new Error(`expected one bundle registration, got ${bundles.length}`);
-if (!packageMap.packages['.'].dependencies['dsh-shortcuts']) throw new Error('package map is missing dsh-shortcuts');
-if (!fs.existsSync(path.join(profileDir, 'node_modules', 'dsh-shortcuts', 'package.json'))) {
-  throw new Error('installed plugin package is unavailable');
-}
+mkdir -p "$TEST_ROOT/bin" "$TEST_ROOT/isolated home/profiles/web"
+cat > "$TEST_ROOT/bin/dsh" <<'NODE'
+#!/usr/bin/env node
+const fs = require('node:fs');
+fs.appendFileSync(process.env.DSH_TEST_LOG, JSON.stringify({args:process.argv.slice(2),home:process.env.DSH_HOME})+'\n');
+process.exit(process.env.DSH_TEST_FAIL === '1' ? 17 : 0);
 NODE
-
-# 重复运行必须幂等，不得追加重复 bundle。
-run_installer
-
-node - "$PROFILE_DIR" <<'NODE'
-const fs = require('fs');
-const path = require('path');
-
-const profileDir = process.argv[2];
-const pkg = JSON.parse(fs.readFileSync(path.join(profileDir, 'package.json'), 'utf8'));
-const bundles = pkg.dsh.profile.bundles.filter((name) => name === 'dsh-shortcuts');
-if (bundles.length !== 1) throw new Error(`reinstall duplicated bundle registration: ${bundles.length}`);
+chmod +x "$TEST_ROOT/bin/dsh"
+export DSH_BIN="$TEST_ROOT/bin/dsh"
+export DSH_TEST_LOG="$TEST_ROOT/calls.jsonl"
+export DSH_PROFILE_DIR="$TEST_ROOT/isolated home/profiles/web"
+export DSH_SHORTCUTS_DIR="$ROOT_DIR"
+bash "$ROOT_DIR/install.sh" > "$TEST_ROOT/result.txt"
+node - "$DSH_TEST_LOG" "$ROOT_DIR" "$TEST_ROOT/isolated home" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const calls = fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').map(JSON.parse);
+assert.deepEqual(calls.map(x => x.args), [
+  ['plugin','--profile','web','add','--save-prod','--ignore-scripts','file:'+process.argv[3]],
+  ['--profile','web','--dump-config'],
+]);
+assert.ok(calls.every(x=>x.home===process.argv[4]), 'all calls must use the explicit disposable home');
 NODE
-
-printf '  ✓ installer registers the plugin for DSH cold starts\n'
+: > "$DSH_TEST_LOG"
+if DSH_TEST_FAIL=1 bash "$ROOT_DIR/install.sh" > "$TEST_ROOT/failed.txt" 2>&1; then
+  echo 'installer must propagate CLI failure' >&2; exit 1
+fi
+node - "$DSH_TEST_LOG" "$TEST_ROOT/failed.txt" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+assert.equal(fs.readFileSync(process.argv[2],'utf8').trim().split('\n').length,1);
+assert.ok(!fs.readFileSync(process.argv[3],'utf8').includes('插件已安装'));
+NODE
+: > "$DSH_TEST_LOG"
+if DSH_PROFILE_DIR="$TEST_ROOT/not-a-profile" bash "$ROOT_DIR/install.sh" >/dev/null 2>&1; then
+  echo 'installer must reject a directory outside the Profile layout' >&2; exit 1
+fi
+[ ! -s "$DSH_TEST_LOG" ]
+printf '  ✓ installer uses official CLI with quoted paths, propagates failure, rejects ambiguous profiles\n'

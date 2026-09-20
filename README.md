@@ -1,14 +1,22 @@
-# dsh-shortcuts — DeepSeek Harness Desktop / WebUI 键盘快捷键
+# dsh-shortcuts — DeepSeek Harness WebUI 键盘快捷键
 
 为 [DeepSeek Harness](https://deepseek.com) 的 WebUI 提供一套**可完全自定义的键盘快捷键系统**。所有可触达的功能预注册在分组列表中，带默认键的直接生效（macOS 优先，其他平台自动改用 Ctrl），其余一键录制即可绑定。配置保存在浏览器 localStorage，刷新/重启不丢。
 
 - **34 个预置功能**，6 个分组：会话 / 视图 / 剪贴板 / 模型 / 权限 / 系统
 - **自定义绑定**：任何功能都可录制任意组合键、清除、禁用，冲突自动检测
 - **快捷键速查表**（`⌘/`）：随时查看全部绑定 + 内置诊断面板
-- **无留痕权限切换**：⇧Tab 直调宿主权限服务，对话流零污染
-- **权限快速切换**：只读 / 工作区写入 / 完全访问（Shitft+tab）
-- **双部署形态**：会话级动态插件（WebUI）+ 宿主级静态插件（Desktop），行为一致
-- **纯浏览器端为主**：无网络请求、不触碰业务数据；仅权限切换经宿主侧路由直写
+- **权限快速切换**：`Shift+Tab` 调用宿主权限服务，切换当前会话的权限预设，不插入聊天命令节点
+- **官方 Bundle 安装**：通过 `dsh plugin` 管理依赖与注册，只新增插件自有条目
+- **本地运行**：配置保存在 localStorage；权限切换使用本地 HTTP 路由，无遥测或插件自有外部服务
+
+## 兼容性
+
+`1.1.5` 针对 DSH `0.1.5-rc.2`、`0.1.6-alpha.1`、`0.1.6-alpha.2` 修复并验证。
+Node.js 范围为 `>=22.13.0`，实际验收环境为 Node.js `24.14.1`、macOS arm64、Chrome、一次性 `web` Profile。
+Desktop、Windows、Linux 和其他 DSH 版本尚未运行验收；不要据此推断兼容。
+
+完整版本声明见 `package.json` 的 `dsh.compatibility`，测试方法及证据见 [兼容性验收记录](docs/compatibility.md)。
+商城收录状态由 DSH STORE 的固定 Commit 复检决定，仓库测试通过不代表已经恢复上架。
 
 ## 功能一览
 
@@ -24,36 +32,41 @@
 > 未标注默认键的功能初始为「未绑定」，在 设置 → 快捷键 中点击「录制」即可自定义添加。
 > 思考强度档位取决于当前模型（如 DeepSeek 的低/中/最大）；权限轮换顺序取决于部署配置的预设表。
 
-## 安装
+## 安装、更新与卸载
 
-### 方式一：一键安装（推荐，一行命令）
+先准备兼容的 DSH CLI 和 Node.js。保存当前任务，停止准备修改的 WebUI 实例，并备份它的 Profile 目录。
+默认目标是 `DSH_HOME`（未设置时为 `~/.dsh`）下的 `web` Profile；Desktop 由官方应用管理，不使用本脚本修改。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ricketts-Guo/dsh-shortcuts/main/install.sh | bash
+git clone https://github.com/Ricketts-Guo/dsh-shortcuts.git
+cd dsh-shortcuts
+git rev-parse HEAD   # 记录并核对要安装的完整 Commit
+./install.sh
 ```
 
-脚本自动完成：克隆插件 → 链接到 web profile → 注册到 `package.json` → **同步 pnpm lockfile（将插件纳入 pnpm 管理，防止后续安装/更新其他插件时被清掉）**（幂等，可重复运行）。完成后**完全退出并重新打开 DeepSeek Harness**，左下角设置按钮旁出现「⌘K 快捷键」按钮即安装成功。
+脚本安装当前检出内容，不自动拉取代码。它委托官方 CLI 完成依赖、锁文件、模块映射和 Bundle 注册，并运行配置合成检查：
 
-**更新插件**：重新运行上面同一行命令即可（`pnpm install` 会同步最新代码副本，再重启 DSH 生效）。
+```bash
+dsh plugin --profile web add --save-prod --ignore-scripts "file:$PWD"
+dsh --profile web --dump-config
+```
 
-**手动步骤版**（脚本等价操作）：
+配置合成通过后，启动该 WebUI，确认侧边栏「快捷键」按钮、`⌘/` 速查表和 设置 → 快捷键 页面可用。
+脚本不会自动关闭或重启正在使用的 DSH。无需手工编辑 Profile 的 `package.json` 或创建软链接。
 
-1. `git clone https://github.com/Ricketts-Guo/dsh-shortcuts.git ~/dsh-shortcuts`
-2. 编辑 `~/.dsh/profiles/web/package.json`，在 `dependencies`（`"dsh-shortcuts": "file:../../../dsh-shortcuts"`）与 `dsh.profile.bundles` 中分别加入 `dsh-shortcuts`
-3. `cd ~/.dsh/profiles/web && pnpm install`（生成 pnpm 受管的 `node_modules/dsh-shortcuts` 副本）
-4. 重启 DSH
+更新时先核对新版本的代码和权限变化，再 `git pull --ff-only` 并重新运行 `./install.sh`，最后重启该 WebUI。
+可以用 `DSH_BIN` 指定 CLI、`DSH_HOME` 指定独立根目录、`DSH_PROFILE` 选择已有自定义 Web Profile（默认 `web`）。
+历史 `DSH_PROFILE_DIR` 仅接受 `<DSH_HOME>/profiles/<profile>` 结构。
 
-> ⚠️ 版本 1.1.0 起安装改为 pnpm 托管：`node_modules/dsh-shortcuts` 是 pnpm 从源码仓库同步的**受管副本**而非符号链接。修改 `~/dsh-shortcuts` 源码后，需重新运行 install.sh（或 `cd ~/.dsh/profiles/web && pnpm install`）同步副本，再重启 DSH 生效。不要手动 `ln -sfn` 覆盖它——pnpm 下次运行时若检测到依赖状态不符可能重装或清理。
+卸载前停止目标实例，然后运行：
 
-### 方式二：会话级动态插件（临时，进程重启后失效）
+```bash
+dsh plugin --profile web remove dsh-shortcuts
+dsh --profile web --dump-config
+```
 
-在 DSH 会话中通过 Cordis 工具加载（`cordis_define` + `cordis_run`）。适合快速试用；需要持久使用请用方式一。
-
-## 卸载
-
-- 静态安装：`cd ~/.dsh/profiles/web && pnpm remove dsh-shortcuts`（或从 `~/.dsh/profiles/web/package.json` 移除两处 `dsh-shortcuts` 引用并运行 `pnpm install`），重启 DSH。
-- 动态插件：`cordis_stop` / `cordis_undefine`。
-- 自定义配置残留在浏览器 localStorage（键 `dsh.shortcuts.v1`），可在浏览器开发者工具中删除。
+重新启动后确认快捷键入口消失。浏览器 localStorage 中的 `dsh.shortcuts.v1` 可按需删除。
+如需回滚，停止目标实例后恢复安装前备份的完整 Profile，再检查配置合成和冷启动；不要在运行中覆盖 Profile。
 
 ## 自定义
 
@@ -87,18 +100,27 @@ curl -fsSL https://raw.githubusercontent.com/Ricketts-Guo/dsh-shortcuts/main/ins
 
 设置页、速查表、冲突检测、持久化、键盘分发全部由注册表自动派生 —— 新增功能只需加一行。`Tab+数字` 使用按住状态识别，同时保留裸 Tab 的正常焦点导航；录制与匹配自洽。
 
-**通道说明**：所有动作走 DSH 官方 client 服务（`layout` / `workspaces` / `theme` / `locale` / `sessions` / `modelDirectories` / session projections），不依赖私有 DOM 结构（仅「打开设置」通过语义属性定位触发按钮）。权限切换经宿主侧通道（动态版 `harness` RPC；静态版本地 HTTP 路由 `/dsh-shortcuts-permission`）直调 `permissionPresets`。
+**通道说明**：会话导航使用 `uiWorkspace`，当前会话由 `uiSession.current` 或旧版 `sessions.list.current` 提供；
+详情面板使用 `sidebarRight`，停止任务使用 `sessions.binding(id).ctx`。模型、主题、语言使用对应的公开 Client 服务。
+快速切换面板直接订阅会话 store，不要求根 overlay 传入旧版隐式 hook。
+权限切换从会话投影读取当前值；alpha.2 的选项通过公开 `remote.permissionPresets.catalog()` 读取。
 
-**Host half 安全说明**：静态版的权限路由校验会话存在与预设合法性，且仅在部署挂载了权限服务时激活；DSH Web 服务应保持 loopback 绑定。
+**权限边界**：本地 `/dsh-shortcuts-permission` 路由会改变当前会话的 sandbox/approval 预设，并非只读操作。
+路由显式调用宿主 connection 的登录及 Host/Origin 检查，仅允许 POST，并校验会话存在和预设合法性。请保持 loopback 绑定；本次没有进行独立安全审计。
+剪贴板功能可能复制会话内容。详见 [权限与边界](SECURITY.md)。
 
 ## 开发与测试
 
 ```bash
-npm test        # 运行测试（需本机装有 DSH，测试通过 host node_modules 解析 react）
-npm run check   # 语法检查 + 测试
+npm ci --ignore-scripts
+npm run check
 ```
 
-测试覆盖：组合键匹配（含上档字符归一化）、模型/思考强度位置选择、无留痕权限轮换、复制消息、剪贴板、全屏、滚动、语言轮换、打字不拦截、优雅降级、React hooks 顺序静态检查（防渲染崩溃）。
+单元与契约测试使用固定的开发依赖，不读取本机 DSH 安装。覆盖组合键、模型与思考强度、权限切换、消息复制、
+会话导航、overlay 渲染、alpha.2 当前会话订阅、目录异常与异步切换会话、Host 路由生命周期、安装脚本参数及失败传播。
+
+真实运行测试使用官方 CLI、精确版本依赖图、临时 `DSH_HOME` 和独立浏览器，检查安装、冷启动、速查表/设置页、卸载及回滚。
+[复验步骤](docs/compatibility.md#reproduce) 包含三个版本的运行环境清单。它不需要模型 API key，也不发送模型请求。
 
 ## 许可证
 

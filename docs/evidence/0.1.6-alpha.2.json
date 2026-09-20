@@ -1,0 +1,37 @@
+{
+  "dsh": "0.1.6-alpha.2",
+  "node": "v24.14.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "checkedAt": "2026-09-20T05:57:50.564Z",
+  "pinnedDshPackages": 250,
+  "operations": {
+    "install": "passed",
+    "start": "passed",
+    "uninstall": "passed",
+    "rollback": "passed"
+  },
+  "checks": [
+    "install.sh delegates packed artifact to official CLI",
+    "one additive Bundle entry; unchanged official composition",
+    "welcome dismissed and model-key setup skipped",
+    "browser shortcut entry, 34-feature cheatsheet and settings, palette, theme and sidebar",
+    "permission route rejects unauthenticated (401), cross-origin (403), GET (405) and missing parameters (400)",
+    "uninstall removes Bundle and route",
+    "restored pre-install snapshot composes and cold-starts"
+  ],
+  "browserErrors": [],
+  "package": {
+    "version": "1.1.5",
+    "sha256": "8d4f47757a4ab56cf9e3d47c9946ac9366fbec48119ffc142f08f51ab9573f77"
+  },
+  "sourceFiles": {
+    "package.json": "38720dd350b1bc1adaa60a06a80e11856c483170a61e8a4673b2c8ef1526730b",
+    "lib/client.js": "f2f216198151d2c1c3793765ad77045bf24daef522cc47950b840bba954f2a2a",
+    "lib/index.js": "b5c56bc6534cf4de62e9d8d1342817b29d2d433cc9678de3b1ce542d0073a072",
+    "cordis.patch.yml": "57af45b7be3c415e89b81df1eebab5eaa69fcae48e167888904abf25501cbd19",
+    "install.sh": "ef0461bda7b950d46bc18e20a7bad2729cf457e742becfe68c23937a1262d5a8",
+    "test/runtime.test.mjs": "61e802ca826b4093ec2b13448d87ee5c92d9ebf2f0b86cf15fad6935b2808155"
+  },
+  "status": "passed"
+}

@@ -3,8 +3,8 @@
  *
  * Loads lib/client.js in a vm sandbox with browser stubs, then drives the
  * registered keydown handler with synthetic events and asserts the actions
- * that fire. Requires a local DeepSeek Harness installation: the factory's
- * `require('react')` is resolved against the host's node_modules.
+ * that fire. React is a pinned development dependency; no desktop installation
+ * or real DSH profile is read or modified.
  *
  * Run: npm test
  */
@@ -15,8 +15,7 @@ const path = require('path');
 const { createRequire } = require('module');
 
 const ROOT = path.join(__dirname, '..');
-const HOST_MODULES = '/Applications/DeepSeek Harness.app/Contents/Resources/host/package.json';
-const hostReq = createRequire(fs.existsSync(HOST_MODULES) ? HOST_MODULES : path.join(ROOT, 'package.json'));
+const hostReq = createRequire(path.join(ROOT, 'package.json'));
 const React = hostReq('react');
 const ReactDOMServer = hostReq('react-dom/server');
 
@@ -43,7 +42,7 @@ const sandbox = {
     removeEventListener: () => {},
     scrollTo: (o) => { sandbox.__scroll = o; },
   },
-  fetch: (url) => { sandbox.__permFetch = String(url); return Promise.resolve({ json: () => Promise.resolve({ ok: true }) }); },
+  fetch: (url, options) => { sandbox.__permFetch = String(url); sandbox.__permMethod = options?.method; return Promise.resolve({ json: () => Promise.resolve({ ok: true }) }); },
   document: {
     createElement: (tag) => (tag === 'style' ? styleEl : {
       append() {}, remove() {}, style: {}, focus() {}, select() {}, addEventListener() {}, removeEventListener() {},
@@ -94,9 +93,11 @@ const fakeDirectory = {
 };
 
 // ---------- projections fake ----------
+const permissionOptions = [{ value: 'read-only', name: 'Read only' }, { value: 'workspace-write', name: 'Workspace write' }, { value: 'danger-full-access', name: 'Full access' }];
+let permissionSnapshot = { options: permissionOptions, currentValue: 'workspace-write' };
 const fakeProjections = {
   faceOf: (key) => {
-    if (key === 'permissions') return { getSnapshot: () => ({ options: [{ value: 'read-only', name: 'Read only' }, { value: 'workspace-write', name: 'Workspace write' }, { value: 'danger-full-access', name: 'Full access' }], currentValue: 'workspace-write' }) };
+    if (key === 'permissions') return { getSnapshot: () => permissionSnapshot };
     if (key === 'conversation') return { getSnapshot: () => ({ nodes: [
       { kind: 'user', seq: 1, content: [] },
       { kind: 'assistant', seq: 2, blocks: [{ kind: 'text', text: '回复一' }] },
@@ -106,7 +107,8 @@ const fakeProjections = {
   },
 };
 
-const sessionList = { current: 's1', byId: { s1: { displayTitle: '我的会话标题' } } };
+const sessionList = { current: 's1', ids: ['s1'], byId: { s1: { displayTitle: '我的会话标题', cwd: '/test' } } };
+const listListeners = new Set();
 
 // ---------- load plugin ----------
 const code = fs.readFileSync(path.join(ROOT, 'lib/client.js'), 'utf8');
@@ -147,8 +149,8 @@ function checkHookOrder(src) {
 
 vm.runInNewContext(code, sandbox, { filename: 'dsh-shortcuts/client.js' });
 const mod = sandbox.__handoff.factory((spec) => hostReq(spec));
-if (JSON.stringify(mod.inject) !== JSON.stringify(['slots', 'sessions', 'remote', 'timer'])) {
-  throw new Error('client module must wait for slots, sessions, remote, and timer before apply');
+if (JSON.stringify(mod.inject) !== JSON.stringify(['slots', 'sessions', 'remote', 'timer', 'uiSession', 'uiWorkspace'])) {
+  throw new Error('client module must wait for its declared public services before apply');
 }
 
 const scopeConversation = { cancel: () => { sandbox.__cancel = true; return Promise.resolve(); } };
@@ -170,12 +172,12 @@ const ctxTarget = {
   get(name) {
     if (name === 'slots') return slotsService;
     if (name === 'sessions') return {
-      binding: () => ({ session: sessionObj }),
-      scope: () => ({ get: (k) => (k === 'conversation' ? scopeConversation : undefined) }),
-      list: { getSnapshot: () => sessionList, subscribe: () => () => {} },
+      binding: () => ({ session: sessionObj, ctx: { get: (k) => (k === 'conversation' ? scopeConversation : undefined) } }),
+      list: { getSnapshot: () => sessionList, subscribe(fn) { listListeners.add(fn); return () => listListeners.delete(fn); } },
     };
     if (name === 'modelDirectories') return { directoryFor: () => fakeDirectory };
-    if (name === 'workspaces') return { startSession: () => { sandbox.__startSession = true; }, archiveSession: () => Promise.resolve() };
+    if (name === 'uiWorkspace') return { startSession: () => { sandbox.__startSession = true; }, openSession: (id) => { sandbox.__opened = id; }, archiveSession: (id) => { sandbox.__archived = id; return Promise.resolve(); } };
+    if (name === 'sidebarRight') return { toggleExpanded: () => { sandbox.__details = true; } };
     if (name === 'layout') return { toggleSidebar: () => { sandbox.__sidebar = true; }, openDetails: () => {}, closeDetails: () => {} };
     if (name === 'theme') return { getTheme: () => ({ active: { colorScheme: 'dark' } }), setTheme: (id) => { sandbox.__theme = id; } };
     if (name === 'locale') return { getSnapshot: () => ({ active: 'zh', locales: [{ id: 'zh' }, { id: 'en' }] }), setLocale: (id) => { sandbox.__locale = id; } };
@@ -199,7 +201,7 @@ const handler = sandbox.__handlers[0];
 if (!handler) throw new Error('keydown handler not registered');
 
 const press = (init, target) => {
-  const event = { repeat: false, target, preventDefault() { this._pd = true; }, stopPropagation() {}, ...init };
+  const event = { repeat: false, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, target, preventDefault() { this._pd = true; }, stopPropagation() {}, ...init };
   handler(event);
   return event;
 };
@@ -243,7 +245,7 @@ const ok = (cond, name) => { if (!cond) throw new Error('FAIL: ' + name); passed
   // 6) ⇧Tab 权限轮换
   press({ key: 'Tab', shiftKey: true, metaKey: false, ctrlKey: false, altKey: false }, ta);
   await sleep(10);
-  ok(sandbox.__permFetch && sandbox.__permFetch.includes('preset=danger-full-access') && sandbox.__permFetch.includes('sessionId=s1'), '⇧Tab cycles permission via silent host route');
+  ok(sandbox.__permMethod === 'POST' && sandbox.__permFetch && sandbox.__permFetch.includes('preset=danger-full-access') && sandbox.__permFetch.includes('sessionId=s1'), '⇧Tab cycles permission via POST to the silent host route');
 
   // 7) ⌘⇧L 主题
   press({ key: 'l', shiftKey: true, metaKey: true, ctrlKey: false, altKey: false }, ta);
@@ -256,6 +258,17 @@ const ok = (cond, name) => { if (!cond) throw new Error('FAIL: ' + name); passed
   const cheatsheetMarkup = ReactDOMServer.renderToStaticMarkup(cheatsheetRenderer({}));
   ok(cheatsheetMarkup.includes('快捷键速查表') && cheatsheetMarkup.includes('命令通道'), '⌘/ renders cheatsheet under guarded DSH context');
   press({ key: '/', shiftKey: false, metaKey: true, ctrlKey: false, altKey: false }, ta);
+
+  press({ key: 'k', metaKey: true }, ta);
+  const paletteMarkup = ReactDOMServer.renderToStaticMarkup(slotRenderers['dyn-shortcuts-palette']());
+  ok(paletteMarkup.includes('我的会话标题') && paletteMarkup.includes('新建会话'), 'palette renders from public store without implicit slot props');
+  press({ key: 'k', metaKey: true }, ta);
+  press({ key: 'n', metaKey: true }, ta);
+  ok(sandbox.__startSession === true, 'new session uses uiWorkspace');
+  press({ key: 'a', metaKey: true, shiftKey: true }, ta);
+  ok(sandbox.__archived === 's1', 'archive uses uiWorkspace and legacy list selection');
+  press({ key: 'd', metaKey: true, shiftKey: true }, ta);
+  ok(sandbox.__details === true, 'details uses sidebarRight public toggle');
 
   // 9) 复制最后一条助手消息（预置绑定 ⌘⇧C）
   sandbox.__preset = JSON.stringify({ actions: {
@@ -288,6 +301,68 @@ const ok = (cond, name) => { if (!cond) throw new Error('FAIL: ' + name); passed
   press({ key: 'Tab', shiftKey: false, metaKey: false, ctrlKey: false, altKey: false }, ta);
   ok(commandCalls.length === before2, 'bare Tab is not intercepted');
   release({ key: 'Tab' });
+
+  // alpha.2 selection is a separate public store; list.current may be absent/stale.
+  sandbox.__preset = null;
+  permissionSnapshot = { currentValue: 'workspace-write' };
+  let selectedSession = { key: 's2' };
+  const currentListeners = new Set();
+  const retries = [];
+  const disposers = [];
+  const catalogResult = { ok: true, value: { options: permissionOptions } };
+  let catalog = async () => catalogResult;
+  const alphaContext = {
+    ...ctxTarget,
+    get(name) {
+      if (name === 'uiSession') return { current: {
+        getSnapshot: () => selectedSession,
+        subscribe(fn) { currentListeners.add(fn); return () => currentListeners.delete(fn); },
+      } };
+      if (name === 'remote.permissionPresets') return { catalog: () => catalog() };
+      return ctxTarget.get(name);
+    },
+    timeout(callback, ms) { if (ms === 300) retries.push(callback); return () => {}; },
+    effect(callback) { const dispose = callback(); if (dispose) disposers.push(dispose); },
+  };
+  const listCount = listListeners.size;
+  sandbox.__handoff.factory(hostReq).apply(alphaContext);
+  const alphaHandler = sandbox.__handlers.at(-1);
+  const alphaPress = (init) => alphaHandler({ repeat: false, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, target: ta, preventDefault() {}, stopPropagation() {}, ...init });
+  const selectSession = (value) => { selectedSession = value; for (const listener of currentListeners) listener(); };
+  sandbox.__permFetch = null;
+  alphaPress({ key: 'Tab', shiftKey: true });
+  await sleep(10);
+  ok(sandbox.__permFetch?.includes('sessionId=s2') && sandbox.__permFetch?.includes('preset=danger-full-access'), 'alpha.2 selection and separate permission catalog select the correct session/preset');
+
+  sandbox.__permFetch = null;
+  let resolveCatalog;
+  catalog = () => new Promise(resolve => { resolveCatalog = resolve; });
+  alphaPress({ key: 'Tab', shiftKey: true });
+  selectSession({ key: 's3' });
+  resolveCatalog(catalogResult);
+  await sleep(10);
+  ok(sandbox.__permFetch === null, 'navigation cancels an in-flight permission catalog action');
+
+  catalog = async () => { throw new Error('catalog unavailable'); };
+  alphaPress({ key: 'Tab', shiftKey: true });
+  await sleep(10);
+  for (let i = 0; i < 2; i++) { retries.shift()(); await sleep(10); }
+  ok(sandbox.__permFetch === null && retries.length === 0, 'catalog failure exhausts bounded retries without changing permissions');
+
+  sandbox.__archived = null;
+  sandbox.__details = false;
+  selectSession(null);
+  alphaPress({ key: 'a', metaKey: true, shiftKey: true });
+  alphaPress({ key: 'd', metaKey: true, shiftKey: true });
+  ok(sandbox.__archived === null && sandbox.__details === false, 'empty current selection clears the old session instead of using stale list.current');
+  selectSession({ key: 's3' });
+  catalog = () => new Promise(resolve => { resolveCatalog = resolve; });
+  alphaPress({ key: 'Tab', shiftKey: true });
+  disposers.reverse().forEach(dispose => dispose());
+  resolveCatalog(catalogResult);
+  await sleep(10);
+  ok(sandbox.__permFetch === null, 'unmount cancels a pending permission lookup');
+  ok(currentListeners.size === 0 && listListeners.size === listCount, 'unmount releases both current-session and list subscriptions');
 
   console.log(`\nAll ${passed} tests passed.`);
 })().catch((e) => { console.error('\n' + e.message); process.exit(1); });

@@ -1,6 +1,6 @@
 {
   "name": "dsh-shortcuts",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Fully customizable keyboard shortcuts for the DeepSeek Harness WebUI — macOS-first defaults, 34 pre-registered features across session/view/clipboard/model/permission/system groups, one-click recording to add your own bindings, silent permission cycling with color feedback.",
   "license": "MIT",
   "author": "ziqian.guo",
@@ -33,11 +33,14 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "docs/compatibility.md"
   ],
   "scripts": {
     "test": "node test/shortcuts.test.cjs && node test/host.test.mjs && bash test/install.test.sh",
-    "check": "node --check lib/client.js && node --check lib/index.js && node test/shortcuts.test.cjs && node test/host.test.mjs && bash test/install.test.sh"
+    "check": "node --check lib/client.js && node --check lib/index.js && npm test",
+    "test:runtime": "node test/runtime.test.mjs"
   },
   "dsh": {
     "bundle": {
@@ -45,17 +48,61 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-cordis-client-runner",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-theme"
       ],
       "platform": "web",
       "immediately": true
+    },
+    "compatibility": {
+      "dsh": "0.1.5-rc.2 || 0.1.6-alpha.1 || 0.1.6-alpha.2",
+      "node": ">=22.13.0",
+      "profiles": [
+        "web"
+      ],
+      "dshReleases": {
+        "0.1.5-rc.2": "compatible",
+        "0.1.6-alpha.1": "compatible",
+        "0.1.6-alpha.2": "compatible"
+      },
+      "dshOperations": {
+        "0.1.5-rc.2": {
+          "install": "passed",
+          "start": "passed",
+          "uninstall": "passed",
+          "rollback": "passed"
+        },
+        "0.1.6-alpha.1": {
+          "install": "passed",
+          "start": "passed",
+          "uninstall": "passed",
+          "rollback": "passed"
+        },
+        "0.1.6-alpha.2": {
+          "install": "passed",
+          "start": "passed",
+          "uninstall": "passed",
+          "rollback": "passed"
+        }
+      }
     }
   },
-  "peerDependencies": {
-    "react": "^18.2.0",
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6"
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   }
 }

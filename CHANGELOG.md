@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.5] - 2026-09-20
+
+### Fixed
+- 修复 DSH 0.1.5-rc.2、0.1.6-alpha.1、0.1.6-alpha.2 的公开 Client 服务依赖与会话导航 API
+- 会话快速切换面板直接订阅会话 store，不依赖已移除的 overlay 隐式 useSessions
+- alpha.2 从 uiSession.current 跟踪当前会话，并通过公开权限目录读取预设；导航期间取消过期权限操作
+- 停止任务与详情栏使用当前公开服务，权限诊断正确显示 alpha.2 投影
+
+- 权限路由接入宿主浏览器鉴权与 Host/Origin 检查，改用 POST；新增真实 401/403/405 拒绝测试
+
+### Changed
+- 安装脚本改用官方 dsh plugin 与 dump-config；停止手工修改 Profile、自动拉取源码和隐瞒失败
+- 声明 Node.js 范围与三个精确 DSH 版本，移除已不存在的 client-runtime peer dependency
+- 补充可复现的回归测试、一次性 Profile 安装/启动/卸载/回滚证据和权限说明
+- 明确本次验证范围为 macOS arm64 Web Profile；Desktop 及其他系统未运行验收
+
 ## [1.1.4] - 2026-08-17
 
 ### Fixed
